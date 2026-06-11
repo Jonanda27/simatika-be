@@ -10,6 +10,9 @@ const upload = multer({ storage: multer.memoryStorage() });
 // POST /api/sync
 router.post('/', authMiddleware.verifyToken, upload.any(), syncController.syncFamilyData);
 
+// POST /api/sync/kepengurusan
+router.post('/kepengurusan', authMiddleware.verifyToken, upload.any(), syncController.syncKepengurusan);
+
 // PUT /api/sync/:id
 router.put('/:id', authMiddleware.verifyToken, upload.any(), syncController.updateFamilyData);
 
