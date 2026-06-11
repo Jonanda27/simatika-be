@@ -135,3 +135,47 @@ exports.updateFamilyData = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.syncKepengurusan = async (req, res, next) => {
+  try {
+    // 1. Ambil payload
+    let payload = req.body.payload;
+    if (typeof payload === 'string') {
+      payload = JSON.parse(payload);
+    } else if (!payload && req.body) {
+      payload = req.body;
+    }
+
+    // Paksa tipe jadi KEPENGURUSAN
+    payload.type = 'KEPENGURUSAN';
+
+    // 2. Upload file SK ke Cloudinary
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        if (file.fieldname === 'sk_file') {
+          const result = await uploadToCloudinary(file.buffer, {
+            folder: 'simatika_sk',
+            resource_type: 'auto'
+          });
+          payload.sk_url = result.secure_url;
+        }
+      }
+    }
+
+    // 3. Simpan ke VerificationQueue
+    const queue = await VerificationQueue.create({
+      submitted_by: req.user ? req.user.id : null,
+      payload_data: payload,
+      status: 'PENDING'
+    });
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'Data Kepengurusan berhasil dikirim untuk diverifikasi Paroki.', 
+      queueId: queue.id 
+    });
+  } catch (error) {
+    error.message = 'Gagal mengirim data kepengurusan: ' + error.message;
+    next(error);
+  }
+};

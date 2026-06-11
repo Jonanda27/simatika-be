@@ -1,4 +1,4 @@
-const { Family, Umat, Sacrament, ChurchActivity, Mutation, sequelize, VerificationQueue, User } = require('../../models');
+const { Family, Umat, Sacrament, ChurchActivity, Mutation, sequelize, VerificationQueue, User, KbgPengurus } = require('../../models');
 
 // Helper to convert DD/MM/YYYY to YYYY-MM-DD
 const parseDate = (dateStr) => {
@@ -80,14 +80,33 @@ exports.approveParoki = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Data tidak ditemukan.' });
     }
 
-    if (queue.status !== 'VERIFIED_STASI') {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, message: 'Data harus diverifikasi oleh Stasi terlebih dahulu.' });
-    }
-
     const data = queue.payload_data;
 
-    // --- LOGIKA INSERT ASLI ---
+    if (queue.status !== 'VERIFIED_STASI' && data?.type !== 'KEPENGURUSAN') {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Data Sensus harus diverifikasi oleh Stasi terlebih dahulu.' });
+    }
+
+    // --- LOGIKA INSERT ---
+    if (data?.type === 'KEPENGURUSAN') {
+      // 1. Logika untuk Data Pengurus KBG
+      if (data.pengurus && data.pengurus.length > 0) {
+        for (const p of data.pengurus) {
+          await KbgPengurus.create({
+            kbg_id: data.kbg_id || null,
+            umat_id: p.umat_id || null, // null jika pastor/manual
+            nama_manual: p.umat_id ? null : p.nama,
+            jabatan: p.jabatan,
+            periode_mulai: data.periode_mulai,
+            periode_selesai: data.periode_selesai,
+            nomor_telepon: p.telepon || null,
+            sk_url: data.sk_url || null,
+            is_active: true
+          }, { transaction });
+        }
+      }
+    } else {
+      // 2. Logika Asli untuk Sensus Umat (Keluarga)
     let mappedStatus = data.status_rumah || null;
     if (mappedStatus === 'Milik Sendiri') mappedStatus = 'Milik';
     else if (mappedStatus === 'Kontrak/Sewa') mappedStatus = 'Kontrak';
@@ -203,9 +222,8 @@ exports.approveParoki = async (req, res) => {
           tanggal_mutasi: new Date()
         }, { transaction });
       }
-    }
-
-    // --- END LOGIKA INSERT ASLI ---
+    } // End Loop Members
+    } // End if else type
 
     // Update status queue
     queue.status = 'APPROVED_PAROKI';
