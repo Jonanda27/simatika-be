@@ -9,7 +9,9 @@ module.exports = (sequelize, DataTypes) => {
   Stasi.init({
     id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
     nama_stasi: DataTypes.STRING(100),
-    kode_stasi: DataTypes.STRING(20)
+    kode_stasi: DataTypes.STRING(20),
+    latitude: DataTypes.DECIMAL(10, 8),
+    longitude: DataTypes.DECIMAL(11, 8)
   }, { sequelize, modelName: 'Stasi', tableName: 'stasis' });
   return Stasi;
 };

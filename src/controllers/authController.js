@@ -1,4 +1,4 @@
-const { User } = require('../../models');
+const { User, Kbg } = require('../../models');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -22,11 +22,20 @@ exports.login = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Invalid username or password' });
     }
 
+    // Jika KETUA_KBG, cari KBG yang dia pimpin
+    let kbg_id = null;
+    if (user.role === 'KETUA_KBG') {
+      const kbg = await Kbg.findOne({ where: { ketua_id: user.id } });
+      if (kbg) kbg_id = kbg.id;
+    }
+
     // Buat JWT payload
     const payload = {
       id: user.id,
       username: user.username,
-      role: user.role
+      role: user.role,
+      stasi_id: user.stasi_id,
+      id_kbg: kbg_id
     };
 
     // Tanda tangani token (Gunakan JWT_SECRET dari .env atau fallback)
@@ -57,9 +66,18 @@ exports.getMe = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
     }
 
+    let kbg_id = null;
+    if (user.role === 'KETUA_KBG') {
+      const kbg = await Kbg.findOne({ where: { ketua_id: user.id } });
+      if (kbg) kbg_id = kbg.id;
+    }
+
+    const userData = user.toJSON();
+    userData.id_kbg = kbg_id;
+
     res.status(200).json({
       success: true,
-      user: user
+      user: userData
     });
   } catch (error) {
     error.message = 'Internal server error: ' + error.message;

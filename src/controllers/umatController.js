@@ -19,17 +19,34 @@ exports.getAll = async (req, res, next) => {
       whereClause.jenis_kelamin = jk;
     }
 
+    let kbgWhere = {};
+    if (req.user) {
+      if (req.user.role === 'ADMIN_STASI' && req.user.stasi_id) {
+        kbgWhere.stasi_id = req.user.stasi_id;
+      } else if (req.user.role === 'KETUA_KBG' && req.user.id_kbg) {
+        kbgWhere.id = req.user.id_kbg;
+      }
+    }
+    const kbgsList = await db.Kbg.findAll({ where: kbgWhere, attributes: ['id'] });
+    const kbgIds = kbgsList.map(k => k.id);
+
+    let familyWhere = { kbg_id: kbgIds };
+    if (req.query.kbg_id) {
+      familyWhere.kbg_id = req.query.kbg_id;
+    }
+
     const { count, rows } = await Umat.findAndCountAll({
       where: whereClause,
       include: [
         {
           model: Family,
-          attributes: ['id', 'no_kk_paroki', 'status_rumah', 'pendapatan_per_bulan'],
-          required: false,
+          attributes: ['id', 'no_kk_paroki', 'status_rumah', 'pendapatan_per_bulan', 'kbg_id'],
+          required: true,
+          where: familyWhere,
         },
         {
           model: Sacrament,
-          attributes: ['id', 'jenis_sakramen', 'nomor_surat', 'tanggal_penerimaan', 'tempat_pelaksanaan', 'nama_pastor'],
+          attributes: ['id', 'jenis_sakramen', 'nomor_surat', 'tanggal_penerimaan', 'tempat_pelaksanaan', 'nama_pastor', 'nama_wali_saksi', 'sertifikat_url'],
           required: false,
         },
         {
@@ -71,12 +88,12 @@ exports.getById = async (req, res, next) => {
       include: [
         {
           model: Family,
-          attributes: ['id', 'no_kk_paroki', 'status_rumah', 'pendapatan_per_bulan', 'asuransi_kesehatan', 'fasilitas_kamar_mandi', 'fasilitas_kamar_cuci', 'fasilitas_wc', 'foto_rumah_url', 'latitude', 'longitude'],
+          attributes: ['id', 'kode_unik_keluarga', 'no_kk_paroki', 'status_rumah', 'pendapatan_per_bulan', 'asuransi_kesehatan', 'fasilitas_kamar_mandi', 'fasilitas_kamar_cuci', 'fasilitas_wc', 'foto_rumah_url', 'latitude', 'longitude'],
           required: false,
         },
         {
           model: Sacrament,
-          attributes: ['id', 'jenis_sakramen', 'nomor_surat', 'tanggal_penerimaan', 'tempat_pelaksanaan', 'nama_pastor', 'nama_wali_saksi'],
+          attributes: ['id', 'jenis_sakramen', 'nomor_surat', 'tanggal_penerimaan', 'tempat_pelaksanaan', 'nama_pastor', 'nama_wali_saksi', 'sertifikat_url'],
           required: false,
         },
         {
@@ -98,6 +115,21 @@ exports.getById = async (req, res, next) => {
     res.status(200).json({ success: true, data: umat });
   } catch (error) {
     error.message = 'Gagal mengambil detail umat: ' + error.message;
+    next(error);
+  }
+};
+
+// DELETE /api/umat/:id
+exports.delete = async (req, res, next) => {
+  try {
+    const umat = await Umat.findByPk(req.params.id);
+    if (!umat) {
+      return res.status(404).json({ success: false, message: 'Umat tidak ditemukan.' });
+    }
+    await umat.destroy();
+    res.status(200).json({ success: true, message: 'Data umat berhasil dihapus.' });
+  } catch (error) {
+    error.message = 'Gagal menghapus data umat: ' + error.message;
     next(error);
   }
 };

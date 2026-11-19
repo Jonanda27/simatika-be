@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const churchactivityController = require('../controllers/churchactivityController');
+const { verifyToken } = require('../middlewares/authMiddleware');
 
-router.get('/', churchactivityController.getAll);
-router.get('/:id', churchactivityController.getById);
-router.delete('/:id', churchactivityController.delete);
+router.get('/', verifyToken, churchactivityController.getAll);
+router.get('/:id', verifyToken, churchactivityController.getById);
+router.delete('/:id', verifyToken, churchactivityController.delete);
 
 module.exports = router;

@@ -21,6 +21,17 @@ exports.getAll = async (req, res) => {
       umatWhereClause.nama_lengkap = { [Op.iLike]: `%${search}%` };
     }
 
+    let kbgWhere = {};
+    if (req.user) {
+      if (req.user.role === 'ADMIN_STASI' && req.user.stasi_id) {
+        kbgWhere.stasi_id = req.user.stasi_id;
+      } else if (req.user.role === 'KETUA_KBG' && req.user.id_kbg) {
+        kbgWhere.id = req.user.id_kbg;
+      }
+    }
+    const kbgsList = await db.Kbg.findAll({ where: kbgWhere, attributes: ['id'] });
+    const kbgIds = kbgsList.map(k => k.id);
+
     const { count, rows } = await ChurchActivity.findAndCountAll({
       where: whereClause,
       include: [
@@ -28,11 +39,13 @@ exports.getAll = async (req, res) => {
           model: Umat,
           attributes: ['id', 'nama_lengkap', 'jenis_kelamin'],
           where: Object.keys(umatWhereClause).length > 0 ? umatWhereClause : undefined,
-          required: Object.keys(umatWhereClause).length > 0, // inner join if searching
+          required: true,
           include: [
             {
               model: Family,
-              attributes: ['no_kk_paroki']
+              attributes: ['no_kk_paroki'],
+              required: true,
+              where: { kbg_id: kbgIds }
             }
           ]
         }

@@ -35,6 +35,12 @@ const processFilesToPayload = async (reqFiles, payload) => {
       const result = await uploadToCloudinary(file.buffer);
       payload.foto_rumah_url = result.secure_url;
       delete payload.foto_rumah_path;
+    } else if (file.fieldname === 'file_kk' || file.fieldname === 'kartu_keluarga') {
+      const result = await uploadToCloudinary(file.buffer, { 
+        folder: 'simatika_kk',
+        resource_type: 'auto'
+      });
+      payload.kk_url = result.secure_url;
     } else if (file.fieldname.startsWith('sertifikat_')) {
       // Format: sertifikat_{jenis}_{memberIndex}
       // Contoh: sertifikat_baptis_0
@@ -72,11 +78,12 @@ exports.syncFamilyData = async (req, res, next) => {
     // 2. Upload semua file yang dikirim (foto rumah & sertifikat)
     payload = await processFilesToPayload(req.files, payload);
 
-    // 3. Simpan ke VerificationQueue dengan status PENDING
+    // 3. Simpan ke VerificationQueue (Bypass Stasi jika tidak punya_stasi)
+    const initialStatus = payload.punya_stasi === false ? 'VERIFIED_STASI' : 'PENDING';
     const queue = await VerificationQueue.create({
       submitted_by: req.user ? req.user.id : null,
       payload_data: payload,
-      status: 'PENDING'
+      status: initialStatus
     });
 
     res.status(201).json({ 
@@ -118,9 +125,9 @@ exports.updateFamilyData = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Data tidak ditemukan atau Anda tidak berhak mengubahnya.' });
     }
 
-    // Update data dan reset status
+    // Update data dan reset status (Bypass Stasi jika tidak punya stasi)
     queue.payload_data = payload;
-    queue.status = 'PENDING';
+    queue.status = payload.punya_stasi === false ? 'VERIFIED_STASI' : 'PENDING';
     queue.reject_reason = null;
     await queue.save();
 

@@ -1,28 +1,49 @@
 const db = require('../../models');
-const { Umat, Family, Sacrament } = db;
+const { Umat, Family, Sacrament, Mutation, ChurchActivity, Kbg, Stasi } = db;
 
 exports.getStats = async (req, res, next) => {
   try {
+    let kbgWhere = {};
+
+    if (req.user) {
+      if (req.user.role === 'ADMIN_STASI' && req.user.stasi_id) {
+        kbgWhere.stasi_id = req.user.stasi_id;
+      } else if (req.user.role === 'KETUA_KBG' && req.user.id_kbg) {
+        kbgWhere.id = req.user.id_kbg;
+      }
+    }
+
+    // Ambil semua KBG yang relevan
+    const kbgsList = await Kbg.findAll({ where: kbgWhere, attributes: ['id'] });
+    const kbgIds = kbgsList.map(k => k.id);
+
+    // Ambil semua Keluarga yang relevan
+    const familiesList = await Family.findAll({ where: { kbg_id: kbgIds }, attributes: ['id'] });
+    const familyIds = familiesList.map(f => f.id);
+
+    // Ambil semua Umat yang relevan
+    const umatWhere = { family_id: familyIds };
+    const umatsList = await Umat.findAll({ where: umatWhere, attributes: ['id', 'tanggal_lahir', 'createdAt'] });
+    const umatIds = umatsList.map(u => u.id);
+
     // 1. Total Umat
-    const totalUmat = await Umat.count();
+    const totalUmat = umatIds.length;
 
     // 2. Total Keluarga
-    const totalKeluarga = await Family.count();
+    const totalKeluarga = familyIds.length;
 
     // 3. Sakramen Baptis
     const sakramenBaptis = await Sacrament.count({
-      where: { jenis_sakramen: 'Baptis' }
+      where: { jenis_sakramen: 'Baptis', umat_id: umatIds }
     });
 
     // 4. Sakramen Perkawinan
     const sakramenNikah = await Sacrament.count({
-      where: { jenis_sakramen: 'Perkawinan' }
+      where: { jenis_sakramen: 'Perkawinan', umat_id: umatIds }
     });
 
     // 5. Kalkulasi Komposisi Umur (Anak: 0-17, Dewasa: 18-59, Lansia: 60+)
-    const umats = await Umat.findAll({
-      attributes: ['tanggal_lahir', 'createdAt']
-    });
+    const umats = umatsList;
 
     let anak = 0;
     let dewasa = 0;
@@ -80,6 +101,111 @@ exports.getStats = async (req, res, next) => {
       });
     }
 
+    // 7. Statistik Mutasi Umat
+    const mutasiData = await Mutation.findAll({
+      attributes: ['jenis_mutasi', [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'total']],
+      where: { umat_id: umatIds },
+      group: ['jenis_mutasi']
+    });
+    
+    // Pastikan warna konsisten dengan jenis_mutasi
+    const mutasiColors = {
+      'Pindah Basis': '#3b82f6',
+      'Pindah Stasi': '#10b981',
+      'Pindah Paroki': '#f59e0b',
+      'Pindah Dekenat': '#8b5cf6',
+      'Pindah Keuskupan': '#6366f1',
+      'Meninggal': '#ef4444'
+    };
+    
+    const statistikMutasi = mutasiData.map(m => ({
+      name: m.jenis_mutasi || 'Lainnya',
+      value: parseInt(m.dataValues.total, 10),
+      color: mutasiColors[m.jenis_mutasi] || '#94a3b8'
+    }));
+
+    // 8. Keaktifan Pastoral
+    const pastoralData = await ChurchActivity.findAll({
+      attributes: ['frekuensi_misa', [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'total']],
+      where: { umat_id: umatIds },
+      group: ['frekuensi_misa']
+    });
+
+    const pastoralColors = {
+      'Harian': '#10b981',
+      'Mingguan': '#3b82f6',
+      'Hari Raya': '#f59e0b'
+    };
+
+    const keaktifanPastoral = pastoralData.map(p => ({
+      name: p.frekuensi_misa || 'Lainnya',
+      value: parseInt(p.dataValues.total, 10),
+      color: pastoralColors[p.frekuensi_misa] || '#94a3b8'
+    }));
+
+    let petaSebaran = [];
+
+    if (req.user && req.user.role === 'KETUA_KBG') {
+      const families = await Family.findAll({
+        attributes: ['id', 'no_kk_paroki', 'latitude', 'longitude', 'is_non_stasi'],
+        where: {
+          kbg_id: kbgIds,
+          latitude: { [db.Sequelize.Op.ne]: null },
+          longitude: { [db.Sequelize.Op.ne]: null }
+        },
+        include: [
+          { model: Umat, attributes: ['nama_lengkap'], where: { status_dalam_keluarga: 'KK' }, required: false },
+          { model: Kbg, attributes: ['stasi_id'], required: false }
+        ]
+      });
+
+      petaSebaran = families.map(f => {
+        let name = f.no_kk_paroki ? `Keluarga ${f.no_kk_paroki}` : 'Keluarga';
+        if (f.Umats && f.Umats.length > 0) {
+          name = `Keluarga ${f.Umats[0].nama_lengkap}`;
+        }
+        return {
+          id: f.id,
+          name: name,
+          lat: parseFloat(f.latitude),
+          lng: parseFloat(f.longitude),
+          is_family: true,
+          has_stasi: !f.is_non_stasi && !!f.Kbg?.stasi_id
+        };
+      });
+    } else if (req.user && req.user.role === 'ADMIN_STASI') {
+      const kbgs = await Kbg.findAll({
+        attributes: ['id', 'nama_kbg', 'latitude', 'longitude'],
+        where: {
+          id: kbgIds,
+          latitude: { [db.Sequelize.Op.ne]: null },
+          longitude: { [db.Sequelize.Op.ne]: null }
+        }
+      });
+
+      petaSebaran = kbgs.map(kbg => ({
+        id: kbg.id,
+        name: kbg.nama_kbg,
+        lat: parseFloat(kbg.latitude),
+        lng: parseFloat(kbg.longitude)
+      }));
+    } else {
+      const stasis = await Stasi.findAll({
+        attributes: ['id', 'nama_stasi', 'latitude', 'longitude'],
+        where: {
+          latitude: { [db.Sequelize.Op.ne]: null },
+          longitude: { [db.Sequelize.Op.ne]: null }
+        }
+      });
+
+      petaSebaran = stasis.map(s => ({
+        id: s.id,
+        name: s.nama_stasi,
+        lat: parseFloat(s.latitude),
+        lng: parseFloat(s.longitude)
+      }));
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -90,7 +216,10 @@ exports.getStats = async (req, res, next) => {
           sakramenNikah
         },
         komposisiUmur,
-        grafikUmat
+        grafikUmat,
+        statistikMutasi,
+        keaktifanPastoral,
+        petaSebaran
       }
     });
 

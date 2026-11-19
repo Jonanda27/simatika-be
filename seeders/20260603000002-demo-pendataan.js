@@ -1,213 +1,251 @@
 'use strict';
-
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcryptjs');
 
-/** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    // 1. Dapatkan user pertama sebagai penginput (Atau buat jika tidak ada)
-    const users = await queryInterface.sequelize.query(
-      `SELECT id FROM users LIMIT 1;`
-    );
-    let submittedBy = null;
-    if (users[0] && users[0].length > 0) {
-      submittedBy = users[0][0].id;
-    } else {
-      submittedBy = uuidv4();
-      const bcrypt = require('bcryptjs');
-      await queryInterface.bulkInsert('users', [{
-        id: submittedBy,
-        username: 'pendata_kbg',
-        password: bcrypt.hashSync('password123', 10),
-        nama_lengkap: 'Bapak Pendata',
-        role: 'Admin KBG',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }], {});
-    }
+    const salt = await bcrypt.genSalt(10);
+    const password = await bcrypt.hash('password123', salt);
 
-    // 2. Pastikan ada Stasi & KBG
-    const stasiId = uuidv4();
-    const kbgId = uuidv4();
+    // 1. Create 5 Stasi
+    const stasis = [
+      { id: uuidv4(), kode_stasi: 'S1', nama_stasi: 'Stasi Sempan', latitude: -4.545, longitude: 136.880, createdAt: new Date(), updatedAt: new Date() },
+      { id: uuidv4(), kode_stasi: 'S2', nama_stasi: 'Stasi Katedral', latitude: -4.550, longitude: 136.890, createdAt: new Date(), updatedAt: new Date() },
+      { id: uuidv4(), kode_stasi: 'S3', nama_stasi: 'Stasi SP2', latitude: -4.560, longitude: 136.870, createdAt: new Date(), updatedAt: new Date() },
+      { id: uuidv4(), kode_stasi: 'S4', nama_stasi: 'Stasi SP3', latitude: -4.570, longitude: 136.880, createdAt: new Date(), updatedAt: new Date() },
+      { id: uuidv4(), kode_stasi: 'S5', nama_stasi: 'Stasi Kuala Kencana', latitude: -4.450, longitude: 136.900, createdAt: new Date(), updatedAt: new Date() }
+    ];
+    await queryInterface.bulkInsert('stasis', stasis);
 
-    try {
-      await queryInterface.bulkInsert('stasis', [{
-        id: stasiId,
-        kode_stasi: 'ST-001',
-        nama_stasi: 'Stasi Santo Yosef',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }], {});
-
-      await queryInterface.bulkInsert('kbgs', [{
-        id: kbgId,
-        nama_kbg: 'KBG Santo Petrus',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }], {});
-    } catch (e) {
-      // ignore if exists
-    }
-
-    // Helper to format date as DD/MM/YYYY
-    const formatDate = (date) => {
-      return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-    };
-
-    // 3. Generate Verification Queue Items (Draf dari Mobile)
-    const queues = [];
-    const famNames = ['Kogoya', 'Wenda', 'Tabuni', 'Mote', 'Magai', 'Gobai', 'Degei', 'Pakuage', 'Kayame', 'Yeimo'];
-
-    for (let i = 0; i < 15; i++) {
-      const famName = famNames[i % famNames.length];
-      
-      const bapakLahir = new Date(1960 + Math.floor(Math.random() * 15), Math.floor(Math.random() * 11), Math.floor(Math.random() * 28) + 1);
-      const ibuLahir = new Date(1965 + Math.floor(Math.random() * 15), Math.floor(Math.random() * 11), Math.floor(Math.random() * 28) + 1);
-      const anak1Lahir = new Date(2010 + Math.floor(Math.random() * 5), Math.floor(Math.random() * 11), Math.floor(Math.random() * 28) + 1);
-      
-      const members = [
-        // Bapak
-        {
-          nama_lengkap: `Bapak ${famName} ${i}`,
-          fam: famName,
-          tempat_lahir: 'Timika',
-          tgl_lahir: formatDate(bapakLahir),
-          jenis_kelamin: 'Laki-Laki',
-          status_dalam_keluarga: 'KK',
-          pekerjaan: 'Pegawai Swasta',
-          suku: 'Mee',
-          pendidikan_terakhir: 'SMA',
-          status_kesehatan: 'Normal',
-          has_baptis: true,
-          baptis_no_surat: `BPT-${100+i}`,
-          baptis_tempat: 'Paroki SP2',
-          baptis_tgl: '10/08/1980',
-          has_perkawinan: true,
-          kawin_no_surat: `PKW-${200+i}`,
-          kawin_tempat: 'Gereja Katedral',
-          kawin_tgl: '20/08/2005',
-          misa_frekuensi: i % 2 === 0 ? 'Mingguan' : 'Harian',
-          keaktifan: 'Dewan Pastoral',
-          petugas_liturgi: 'Lektor',
-          status_hidup: 'Masih Hidup',
-          status_pindah: 'Menetap'
-        },
-        // Ibu
-        {
-          nama_lengkap: `Ibu Maria ${famName} ${i}`,
-          fam: famName,
-          tempat_lahir: 'Nabire',
-          tgl_lahir: formatDate(ibuLahir),
-          jenis_kelamin: 'Perempuan',
-          status_dalam_keluarga: 'Istri',
-          pekerjaan: 'Ibu Rumah Tangga',
-          suku: 'Mee',
-          pendidikan_terakhir: 'SMP',
-          status_kesehatan: 'Normal',
-          has_baptis: true,
-          baptis_no_surat: `BPT-${150+i}`,
-          baptis_tempat: 'Paroki SP2',
-          baptis_tgl: '15/09/1985',
-          has_perkawinan: true,
-          kawin_no_surat: `PKW-${200+i}`,
-          kawin_tempat: 'Gereja Katedral',
-          kawin_tgl: '20/08/2005',
-          misa_frekuensi: 'Mingguan',
-          status_hidup: 'Masih Hidup',
-          status_pindah: i % 4 === 0 ? 'Pindah Paroki' : 'Menetap'
-        },
-        // Anak 1
-        {
-          nama_lengkap: `Anak Sulung ${famName} ${i}`,
-          fam: famName,
-          tempat_lahir: 'Timika',
-          tgl_lahir: formatDate(anak1Lahir),
-          jenis_kelamin: i % 2 === 0 ? 'Laki-Laki' : 'Perempuan',
-          status_dalam_keluarga: 'Anak',
-          pekerjaan: 'Pelajar',
-          suku: 'Mee',
-          pendidikan_terakhir: 'SD',
-          status_kesehatan: 'Normal',
-          has_baptis: true,
-          baptis_tempat: 'Paroki SP2',
-          baptis_tgl: formatDate(new Date(anak1Lahir.getTime() + 31536000000)), // baptis 1 thn stlh lahir
-          misa_frekuensi: 'Mingguan',
-          petugas_liturgi: 'Misdinar',
-          status_hidup: 'Masih Hidup',
-          status_pindah: 'Menetap'
-        }
-      ];
-
-      // Anak 2
-      if (i % 2 === 0) {
-        const anak2Lahir = new Date(2018 + Math.floor(Math.random() * 5), Math.floor(Math.random() * 11), Math.floor(Math.random() * 28) + 1);
-        members.push({
-          nama_lengkap: `Anak Bungsu ${famName} ${i}`,
-          fam: famName,
-          tempat_lahir: 'Timika',
-          tgl_lahir: formatDate(anak2Lahir),
-          jenis_kelamin: i % 3 === 0 ? 'Laki-Laki' : 'Perempuan',
-          status_dalam_keluarga: 'Anak',
-          pekerjaan: 'Belum Bekerja',
-          suku: 'Mee',
-          pendidikan_terakhir: 'TK',
-          status_kesehatan: 'Normal'
-        });
-      }
-
-      // Kakek
-      if (i % 7 === 0) {
-        const kakekLahir = new Date(1940 + Math.floor(Math.random() * 10), Math.floor(Math.random() * 11), Math.floor(Math.random() * 28) + 1);
-        members.push({
-          nama_lengkap: `Kakek ${famName} ${i}`,
-          fam: famName,
-          tempat_lahir: 'Wamena',
-          tgl_lahir: formatDate(kakekLahir),
-          jenis_kelamin: 'Laki-Laki',
-          status_dalam_keluarga: 'Lainnya',
-          pekerjaan: 'Pensiunan',
-          suku: 'Mee',
-          pendidikan_terakhir: 'SD',
-          status_kesehatan: 'Sakit Kronis',
-          misa_frekuensi: 'Hari Raya',
-          status_hidup: 'Meninggal Dunia',
-          meninggal_tgl: '10/05/2026',
-          meninggal_tempat: 'RSUD Mimika'
-        });
-      }
-
-      const payloadData = {
-        no_kk_paroki: `KKP-2026-${String(i + 1).padStart(3, '0')}`,
-        status_rumah: i % 2 === 0 ? 'Milik Sendiri' : 'Kontrak/Sewa',
-        has_kamar_mandi: true,
-        has_kamar_cuci: true,
-        has_wc: true,
-        pendapatan: String(3000000 + (i * 500000)),
-        asuransi: 'BPJS Kesehatan',
-        lat: -4.5 + (Math.random() * 0.01),
-        lng: 136.9 + (Math.random() * 0.01),
-        foto_rumah_url: 'https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&q=80&w=400',
-        members: members
-      };
-
-      queues.push({
-        id: uuidv4(),
-        submitted_by: submittedBy,
-        payload_data: JSON.stringify(payloadData),
-        status: 'PENDING',
-        reject_reason: null,
-        // Acak tanggal input agar terlihat dinamis di queue
-        createdAt: new Date(new Date().setHours(new Date().getHours() - (i * 5))),
-        updatedAt: new Date()
+    // 2. Create Users for Admin Stasi and Ketua KBG
+    const users = [];
+    stasis.forEach(stasi => {
+      users.push({
+        id: uuidv4(), username: `admin_${stasi.kode_stasi.toLowerCase()}`, password, role: 'ADMIN_STASI', stasi_id: stasi.id, createdAt: new Date(), updatedAt: new Date()
       });
+    });
+
+    // 3. Create 2 KBGs per Stasi
+    const kbgsList = [];
+    const kbgNames = [
+      ['Imanuel', 'Mikael'],
+      ['Petrus', 'Paulus'],
+      ['Yohanes', 'Maria'],
+      ['Lukas', 'Markus'],
+      ['Matius', 'Yosef']
+    ];
+
+    stasis.forEach((stasi, stasiIndex) => {
+      for (let i = 0; i < 2; i++) {
+        const kbgId = uuidv4();
+        const ketuaId = uuidv4();
+        
+        users.push({
+          id: ketuaId, username: `kbg_${kbgNames[stasiIndex][i].toLowerCase()}`, password, role: 'KETUA_KBG', createdAt: new Date(), updatedAt: new Date()
+        });
+
+        kbgsList.push({
+          id: kbgId,
+          kode_kbg: `K${i + 1}`,
+          nama_kbg: `KBG ${kbgNames[stasiIndex][i]}`,
+          stasi_id: stasi.id,
+          ketua_id: ketuaId,
+          prefix: stasi.kode_stasi,
+          lat: stasi.latitude + (Math.random() - 0.5) * 0.01,
+          lng: stasi.longitude + (Math.random() - 0.5) * 0.01,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+      }
+    });
+
+    await queryInterface.bulkInsert('users', users);
+
+    const kbgInserts = kbgsList.map(({ id, kode_kbg, nama_kbg, stasi_id, ketua_id, lat, lng, createdAt, updatedAt }) => ({
+      id, kode_kbg, nama_kbg, stasi_id, ketua_id, latitude: lat, longitude: lng, createdAt, updatedAt
+    }));
+    await queryInterface.bulkInsert('kbgs', kbgInserts);
+
+    // 4. Create 5 Keluarga for each KBG
+    const familiesToInsert = [];
+    const umatsToInsert = [];
+    const sacramentsToInsert = [];
+    const mutationsToInsert = [];
+    const churchActivitiesToInsert = [];
+    const verificationQueuesToInsert = [];
+
+    let kkCounter = 1;
+    let umatCounter = 1;
+
+    for (const kbg of kbgsList) {
+      for (let i = 1; i <= 5; i++) {
+        const familyId = uuidv4();
+        
+        const latOffset = (Math.random() - 0.5) * 0.005;
+        const lngOffset = (Math.random() - 0.5) * 0.005;
+
+        familiesToInsert.push({
+          id: familyId,
+          kbg_id: kbg.id,
+          kode_unik_keluarga: `${kbg.prefix}-${kbg.kode_kbg}-K${String(i).padStart(3, '0')}`,
+          no_kk_paroki: `337412345678${String(kkCounter++).padStart(4, '0')}`,
+          status_rumah: i % 2 === 0 ? 'Milik' : 'Kontrak',
+          foto_rumah_url: 'https://res.cloudinary.com/du3w9deid/image/upload/v1781510999/images_jmaboa.jpg',
+          fasilitas_kamar_mandi: true,
+          fasilitas_kamar_cuci: true,
+          fasilitas_wc: true,
+          pendapatan_per_bulan: Math.floor(Math.random() * 5000000) + 3000000,
+          asuransi_kesehatan: 'BPJS',
+          latitude: kbg.lat + latOffset,
+          longitude: kbg.lng + lngOffset,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+
+        // Buat 3 atau 4 anggota umat per keluarga
+        const jumlahAnggota = Math.random() > 0.5 ? 4 : 3;
+        const roles = ['KK', 'Istri', 'Anak', 'Anak'];
+        const listNamaAnak = ['Yohanes', 'Maria', 'Petrus', 'Fransiskus', 'Klara', 'Agnes', 'Antonius', 'Lusia', 'Stefanus'];
+        const listNamaBapak = ['Stefanus', 'Ignasius', 'Paulus', 'Mikael', 'Gabriel', 'Budi', 'Joko'];
+        const listNamaIbu = ['Theresia', 'Katarina', 'Siti', 'Yuliana', 'Marta', 'Elisabeth', 'Anna'];
+        const listMarga = ['Magai', 'Pigai', 'Adii', 'Dogopia', 'Degei', 'Boma', 'Pakage', 'Pekei', 'Yeimo'];
+        const famKeluarga = listMarga[Math.floor(Math.random() * listMarga.length)];
+
+        for (let j = 0; j < jumlahAnggota; j++) {
+          let nama;
+          const randomBapak = listNamaBapak[Math.floor(Math.random() * listNamaBapak.length)];
+          const randomIbu = listNamaIbu[Math.floor(Math.random() * listNamaIbu.length)];
+          const randomAnak = listNamaAnak[Math.floor(Math.random() * listNamaAnak.length)];
+          
+          if (j === 0) nama = `${randomBapak} ${famKeluarga}`;
+          else if (j === 1) nama = `${randomIbu} ${famKeluarga}`;
+          else nama = `${randomAnak} ${famKeluarga}`;
+
+          const umatId = uuidv4();
+          const jenisKelamin = j === 1 ? 'P' : (j === 0 ? 'L' : (Math.random() > 0.5 ? 'L' : 'P'));
+
+          umatsToInsert.push({
+            id: umatId,
+            family_id: familyId,
+            nomor_induk_umat: `${kbg.prefix}-${kbg.kode_kbg}-U${String(umatCounter++).padStart(3, '0')}`,
+            nama_lengkap: nama.toUpperCase(),
+            fam: famKeluarga,
+            tempat_lahir: 'Timika',
+            tanggal_lahir: `19${80 + j * 5}-01-01`,
+            jenis_kelamin: jenisKelamin,
+            status_dalam_keluarga: roles[j],
+            pekerjaan: j >= 2 ? 'Pelajar' : 'Wiraswasta',
+            suku: 'Papua',
+            pendidikan_terakhir: j >= 2 ? 'SD' : 'SMA',
+            status_kesehatan: 'Normal',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+
+          // Insert Sacrament (Baptis for all, Komuni/Krisma for parents)
+          sacramentsToInsert.push({
+            id: uuidv4(),
+            umat_id: umatId,
+            jenis_sakramen: 'Baptis',
+            nomor_surat: `BPT/${String(Math.floor(Math.random() * 1000)).padStart(4, '0')}`,
+            tanggal_penerimaan: `19${81 + j * 5}-05-05`,
+            tempat_pelaksanaan: 'Gereja Katedral Timika',
+            nama_pastor: 'P. Yohanes',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+
+          if (j < 2) {
+            sacramentsToInsert.push({
+              id: uuidv4(),
+              umat_id: umatId,
+              jenis_sakramen: 'Perkawinan',
+              nomor_surat: `PKW/${String(Math.floor(Math.random() * 1000)).padStart(4, '0')}`,
+              tanggal_penerimaan: `2005-08-15`,
+              tempat_pelaksanaan: 'Gereja Katedral Timika',
+              nama_pastor: 'P. Stefanus',
+              createdAt: new Date(),
+              updatedAt: new Date()
+            });
+
+            // Insert Church Activity untuk orang tua
+            churchActivitiesToInsert.push({
+              id: uuidv4(),
+              umat_id: umatId,
+              frekuensi_misa: Math.random() > 0.5 ? 'Mingguan' : 'Harian',
+              keaktifan_organisasi: 'Legio Maria',
+              petugas_liturgi: j === 0 ? 'Prodiakon' : 'Lektor',
+              riwayat_kursus: JSON.stringify(['KEP', 'KPP']),
+              createdAt: new Date(),
+              updatedAt: new Date()
+            });
+          }
+
+          // Tambahkan mutasi secara acak (sekitar 10% umat mengalami mutasi)
+          if (Math.random() > 0.9) {
+            const mutasiList = ['Pindah Basis', 'Pindah Stasi', 'Pindah Paroki', 'Meninggal'];
+            mutationsToInsert.push({
+              id: uuidv4(),
+              umat_id: umatId,
+              jenis_mutasi: mutasiList[Math.floor(Math.random() * mutasiList.length)],
+              tanggal_kejadian: '2025-10-10',
+              keterangan: 'Mutasi dummy',
+              tempat_kematian: 'Rumah Sakit',
+              createdAt: new Date(),
+              updatedAt: new Date()
+            });
+          }
+        }
+      }
     }
 
-    await queryInterface.bulkInsert('verification_queues', queues, {});
+    // Tambahkan beberapa VerificationQueue tersebar di berbagai KBG/Stasi
+    const listNamaVerifikasi = ['Agustinus', 'Yoseph', 'Fransiskus', 'Ignasius', 'Mikael', 'Paulus', 'Petrus'];
+    const listMargaVerifikasi = ['Degei', 'Boma', 'Pakage', 'Pekei', 'Yeimo', 'Magai', 'Pigai'];
+
+    kbgsList.forEach((kbg, idx) => {
+      // 2 data pending untuk setiap KBG
+      for (let i = 0; i < 2; i++) {
+        const randomNama = listNamaVerifikasi[Math.floor(Math.random() * listNamaVerifikasi.length)];
+        const randomMarga = listMargaVerifikasi[Math.floor(Math.random() * listMargaVerifikasi.length)];
+        
+        verificationQueuesToInsert.push({
+          id: uuidv4(),
+          submitted_by: kbg.ketua_id,
+          payload_data: JSON.stringify({ 
+            type: 'ADD_KELUARGA', 
+            members: [
+              { nama_lengkap: `${randomNama} ${randomMarga}`, status_dalam_keluarga: 'KK' }
+            ],
+            kbg_id: kbg.id 
+          }),
+          status: i === 0 ? 'PENDING' : 'VERIFIED_STASI',
+          reject_reason: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+      }
+    });
+
+    await queryInterface.bulkInsert('families', familiesToInsert);
+    await queryInterface.bulkInsert('umats', umatsToInsert);
+    await queryInterface.bulkInsert('sacraments', sacramentsToInsert);
+    await queryInterface.bulkInsert('church_activities', churchActivitiesToInsert);
+    await queryInterface.bulkInsert('mutations', mutationsToInsert);
+    await queryInterface.bulkInsert('verification_queues', verificationQueuesToInsert);
+
+    console.log('Seeder: Berhasil membuat 5 Stasi, 10 KBG, 50 Keluarga, ~150+ Umat beserta Sakramen, Mutasi, Aktivitas, dan Verifikasi.');
   },
 
   async down(queryInterface, Sequelize) {
     await queryInterface.bulkDelete('verification_queues', null, {});
+    await queryInterface.bulkDelete('mutations', null, {});
+    await queryInterface.bulkDelete('church_activities', null, {});
+    await queryInterface.bulkDelete('sacraments', null, {});
+    await queryInterface.bulkDelete('umats', null, {});
+    await queryInterface.bulkDelete('families', null, {});
     await queryInterface.bulkDelete('kbgs', null, {});
+    await queryInterface.bulkDelete('users', { role: ['KETUA_KBG', 'ADMIN_STASI'] }, {});
     await queryInterface.bulkDelete('stasis', null, {});
   }
 };

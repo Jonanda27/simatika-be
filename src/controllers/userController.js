@@ -4,8 +4,13 @@ const bcrypt = require('bcryptjs');
 // Mendapatkan semua pengguna
 exports.getAllUsers = async (req, res) => {
   try {
+    const { Stasi, Kbg } = require('../../models');
     const users = await User.findAll({
-      attributes: { exclude: ['password'] }
+      attributes: { exclude: ['password'] },
+      include: [
+        { model: Stasi, attributes: ['nama_stasi'] },
+        { model: Kbg, as: 'Kbg', attributes: ['id', 'nama_kbg'] }
+      ]
     });
     res.status(200).json({ success: true, data: users });
   } catch (error) {
@@ -17,8 +22,13 @@ exports.getAllUsers = async (req, res) => {
 // Mendapatkan satu pengguna berdasarkan ID
 exports.getUserById = async (req, res) => {
   try {
+    const { Stasi, Kbg } = require('../../models');
     const user = await User.findByPk(req.params.id, {
-      attributes: { exclude: ['password'] }
+      attributes: { exclude: ['password'] },
+      include: [
+        { model: Stasi, attributes: ['nama_stasi'] },
+        { model: Kbg, as: 'Kbg', attributes: ['id', 'nama_kbg'] }
+      ]
     });
     
     if (!user) {
@@ -35,7 +45,7 @@ exports.getUserById = async (req, res) => {
 // Membuat pengguna baru
 exports.createUser = async (req, res) => {
   try {
-    const { username, password, role } = req.body;
+    const { username, password, role, stasi_id, kbg_id } = req.body;
     
     if (!username || !password || !role) {
       return res.status(400).json({ success: false, message: 'Username, password, and role are required' });
@@ -54,8 +64,14 @@ exports.createUser = async (req, res) => {
     const newUser = await User.create({
       username,
       password: hashedPassword,
-      role
+      role,
+      stasi_id: role === 'ADMIN_STASI' ? stasi_id : null
     });
+
+    if (role === 'KETUA_KBG' && kbg_id) {
+      const { Kbg } = require('../../models');
+      await Kbg.update({ ketua_id: newUser.id }, { where: { id: kbg_id } });
+    }
 
     const userResponse = newUser.toJSON();
     delete userResponse.password;
@@ -70,7 +86,7 @@ exports.createUser = async (req, res) => {
 // Memperbarui data pengguna
 exports.updateUser = async (req, res) => {
   try {
-    const { username, password, role } = req.body;
+    const { username, password, role, stasi_id, kbg_id } = req.body;
     const userId = req.params.id;
 
     const user = await User.findByPk(userId);
@@ -89,6 +105,27 @@ exports.updateUser = async (req, res) => {
 
     if (role) {
       user.role = role;
+    }
+    
+    if (user.role === 'ADMIN_STASI' && stasi_id !== undefined) {
+      user.stasi_id = stasi_id;
+    } else if (user.role !== 'ADMIN_STASI') {
+      user.stasi_id = null;
+    }
+
+    if (user.role === 'KETUA_KBG') {
+      const { Kbg } = require('../../models');
+      // Kosongkan ketua_id di KBG yang sebelumnya dipegang oleh user ini
+      await Kbg.update({ ketua_id: null }, { where: { ketua_id: user.id } });
+      
+      // Update ketua_id di KBG yang baru dipilih
+      if (kbg_id) {
+        await Kbg.update({ ketua_id: user.id }, { where: { id: kbg_id } });
+      }
+    } else {
+      // Jika rolenya diubah dari KETUA_KBG menjadi role lain, lepaskan KBG-nya
+      const { Kbg } = require('../../models');
+      await Kbg.update({ ketua_id: null }, { where: { ketua_id: user.id } });
     }
 
     // Jika ganti password

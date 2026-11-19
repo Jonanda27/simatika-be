@@ -12,6 +12,7 @@ module.exports = (sequelize, DataTypes) => {
   Umat.init({
     id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
     family_id: DataTypes.UUID,
+    nomor_induk_umat: DataTypes.STRING(50),
     kode_numpang: DataTypes.STRING(10),
     nama_lengkap: DataTypes.STRING(255),
     fam: DataTypes.STRING(100),

@@ -28,6 +28,8 @@ const sacramentRoutes = require('./routes/sacramentRoutes');
 const mutationRoutes = require('./routes/mutationRoutes');
 const churchActivityRoutes = require('./routes/churchactivityRoutes');
 const userRoutes = require('./routes/userRoutes');
+const draftRoutes = require('./routes/draftRoutes');
+const kbgRoutes = require('./routes/kbgRoutes');
 
 app.use('/api/sync', syncRoutes);
 app.use('/api/auth', authRoutes);
@@ -39,6 +41,10 @@ app.use('/api/sakramen', sacramentRoutes);
 app.use('/api/mutasi', mutationRoutes);
 app.use('/api/aktivitas', churchActivityRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/drafts', draftRoutes);
+app.use('/api/kbgs', kbgRoutes);
+app.use('/api/kbg-pengurus', require('./routes/kbgPengurusRoutes'));
+app.use('/api/stasi', require('./routes/stasiRoutes'));
 
 // Global Error Handler
 const errorHandler = require('./middlewares/errorHandler');
